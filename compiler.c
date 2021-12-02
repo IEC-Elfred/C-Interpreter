@@ -41,6 +41,30 @@ int *text,                    // text segment
     *stack;                   // stack
 char *data;                   // data segment
 int *pc, *bp, *sp, ax, cycle; // virtual machine registers
+int token_val;                // value of current token (mainly for number)
+int *current_id,              // current parsed ID
+    *symbols;                 // symbol table
+
+struct identifier
+{
+    int token;
+    int hash;
+    char *name;
+};
+
+enum
+{
+    Token,
+    Hash,
+    Name,
+    Type,
+    Class,
+    Value,
+    BType,
+    BClass,
+    BValue,
+    IdSize
+};
 
 // instructions
 enum
@@ -135,8 +159,51 @@ void next()
     {
         ++src;
         // parse token here
+        if (token == '\n')
+        {
+            ++line;
+        }
+        else if (token == '#')
+        {
+            // skip macro, because we will not support it
+            while (*src != 0 && *src != '\n')
+            {
+                src++;
+            }
+        }
+        else if ((token >= 'a' && token <= 'z') || (token >= 'A' && token <= 'Z') || (token == '_'))
+        {
+            //parse identifier
+            last_pos = src - 1;
+            hash = token;
+            while ((*src >= 'a' && *src <= 'z') || (*src >= 'A' && *src <= 'Z') || (*src >= '0' && *src <= '9') || (*src == '_'))
+            {
+                hash = hash * 147 + *src;
+                src++;
+            }
+            // look for existing identifier, linear search
+            current_id = symbols;
+            while (current_id[Token])
+            {
+                if (current_id[Hash] == hash && !memcmp((char *)current_id[Name], last_pos, src - last_pos))
+                {
+                    //found one,return
+                    token = current_id[Token];
+                    return;
+                }
+                current_id = current_id + IdSize;
+            }
+
+            //store new ID
+            current_id[Name] = (int)last_pos;
+            current_id[Hash] = hash;
+            token = current_id[Token] = Id;
+            return;
+        }
+        
+        
     }
-    
+
     token = *src++;
     return;
 }
@@ -333,8 +400,7 @@ int main(int argc, char **argv)
     argv++;
     poolsize = 256 * 1024;
     line = 1;
-    if ((fd = open(*argv, 0)) < 0)
-    {
+   if ((fd = open(*argv, 0)) < 0) {
         printf("could not open(%s)\n", *argv);
         return -1;
     }
